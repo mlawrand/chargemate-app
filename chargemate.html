@@ -1,0 +1,2586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChargeMate - Battery Assistant</title>
+    <script src="charger.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        'primary-dark': '#4a49b1',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        'dark-bg': '#181818',
+                        'dark-card': '#282828'
+                    }
+                }
+            }
+        }
+
+        // Dark mode detection
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    <style>
+        /* Custom battery gauge styling */
+        .battery-gauge {
+            position: relative;
+            width: 150px;
+            height: 75px;
+            margin: 0 auto;
+            border-radius: 15px 15px 5px 5px;
+            overflow: hidden;
+            border: 2px solid #888;
+        }
+        
+        .battery-gauge::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            right: -10px;
+            width: 10px;
+            height: 30px;
+            background: #888;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .battery-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 75%;
+            background: linear-gradient(to top, #10B981, #5D5CDE);
+            transition: height 0.8s ease;
+        }
+
+        .battery-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            font-size: 24px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .dark .battery-gauge {
+            border-color: #555;
+        }
+        
+        .dark .battery-gauge::after {
+            background: #555;
+        }
+
+        /* Map placeholder */
+        .map-placeholder {
+            background-image: radial-gradient(circle, rgba(93,92,222,0.2) 10%, transparent 10%),
+                            radial-gradient(circle, rgba(93,92,222,0.2) 10%, transparent 10%);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
+        }
+
+        /* QR code animation */
+        .scan-line {
+            position: absolute;
+            height: 2px;
+            width: 100%;
+            background: #5D5CDE;
+            animation: scan 2s linear infinite;
+        }
+        
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+
+        /* Notification badge */
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: #EF4444;
+            color: white;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Login/Signup form animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Screen transitions */
+        .slide-in-right {
+            animation: slideInRight 0.3s forwards;
+        }
+        
+        .slide-out-right {
+            animation: slideOutRight 0.3s forwards;
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        
+        @keyframes slideOutRight {
+            from { transform: translateX(0); }
+            to { transform: translateX(100%); }
+        }
+
+        /* Slide up animation for menu */
+        .slide-up {
+            animation: slideUp 0.3s forwards;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        
+        /* Input focus effect */
+        .input-focus-effect {
+            position: relative;
+        }
+        
+        .input-focus-effect::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: #5D5CDE;
+            transition: width 0.3s ease;
+        }
+        
+        .input-focus-effect:focus-within::after {
+            width: 100%;
+        }
+
+        /* Make bottom navigation fixed across all screens */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+        }
+
+        /* Content areas should have appropriate padding to avoid overlap with bottom nav */
+        .content-area {
+            padding-bottom: 80px;
+        }
+
+        /* Ensure all screen divs have appropriate styling */
+        .app-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 30;
+            overflow-y: auto;
+            background-color: white;
+        }
+
+        .dark .app-screen {
+            background-color: #181818;
+        }
+        
+        /* Fixed action menu that doesn't get hidden by bottom nav */
+        .actions-menu {
+            position: fixed;
+            bottom: 60px; /* Height of bottom nav + some padding */
+            left: 0;
+            right: 0;
+            max-height: calc(100vh - 60px - 56px); /* Subtract bottom nav height and header height */
+            overflow-y: auto;
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-dark-bg text-gray-800 dark:text-gray-200 min-h-screen">
+    <!-- Login/Signup Screen (Initially Visible) -->
+    <div id="authScreen" class="min-h-screen flex items-center justify-center px-4">
+        <div class="w-full max-w-md">
+            <!-- App Logo -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary mb-4">
+                    <i class="fas fa-bolt text-white text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold">ChargeMate</h1>
+                <p class="text-gray-500 dark:text-gray-400">Smart Battery Management System</p>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="bg-gray-100 dark:bg-dark-card rounded-xl p-6 shadow-md fade-in">
+                <h2 class="text-xl font-semibold mb-6 text-center">Log In</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="email">Email</label>
+                        <div class="input-focus-effect">
+                            <input type="email" id="email" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="your@email.com" value="johndoe@example.com">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="password">Password</label>
+                        <div class="input-focus-effect">
+                            <input type="password" id="password" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="••••••••" value="password123">
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <input id="remember-me" type="checkbox" class="h-4 w-4 text-primary border-gray-300 rounded" checked>
+                            <label for="remember-me" class="ml-2 block text-sm">Remember me</label>
+                        </div>
+                        <a href="#" class="text-sm text-primary hover:underline">Forgot password?</a>
+                    </div>
+                    
+                    <button id="loginButton" class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg transition">
+                        Log In
+                    </button>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <p class="text-sm">Don't have an account? <a href="#" id="showSignupLink" class="text-primary hover:underline">Sign up</a></p>
+                </div>
+                
+                <div class="mt-6">
+                    <div class="relative">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-2 bg-gray-100 dark:bg-dark-card text-gray-500">Or continue with</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 grid grid-cols-3 gap-3">
+                        <button class="w-full py-2 px-4 rounded-lg border border-gray-300 dark:border-gray-600 flex justify-center">
+                            <i class="fab fa-google text-red-500"></i>
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg border border-gray-300 dark:border-gray-600 flex justify-center">
+                            <i class="fab fa-facebook text-blue-600"></i>
+                        </button>
+                        <button class="w-full py-2 px-4 rounded-lg border border-gray-300 dark:border-gray-600 flex justify-center">
+                            <i class="fab fa-apple text-gray-800 dark:text-white"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Signup Form (Initially Hidden) -->
+            <div id="signupForm" class="bg-gray-100 dark:bg-dark-card rounded-xl p-6 shadow-md hidden fade-in">
+                <h2 class="text-xl font-semibold mb-6 text-center">Create Account</h2>
+                
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1" for="firstName">First Name</label>
+                            <div class="input-focus-effect">
+                                <input type="text" id="firstName" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="John">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" for="lastName">Last Name</label>
+                            <div class="input-focus-effect">
+                                <input type="text" id="lastName" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="Doe">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="signupEmail">Email</label>
+                        <div class="input-focus-effect">
+                            <input type="email" id="signupEmail" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="your@email.com">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="phone">Phone Number</label>
+                        <div class="input-focus-effect">
+                            <input type="tel" id="phone" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="+256 XXX XXX XXX">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="signupPassword">Password</label>
+                        <div class="input-focus-effect">
+                            <input type="password" id="signupPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="••••••••">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1" for="confirmPassword">Confirm Password</label>
+                        <div class="input-focus-effect">
+                            <input type="password" id="confirmPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none" placeholder="••••••••">
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start">
+                        <input id="terms" type="checkbox" class="h-4 w-4 mt-1 text-primary border-gray-300 rounded">
+                        <label for="terms" class="ml-2 block text-sm">
+                            I agree to the <a href="#" class="text-primary hover:underline">Terms of Service</a> and <a href="#" class="text-primary hover:underline">Privacy Policy</a>
+                        </label>
+                    </div>
+                    
+                    <button id="signupButton" class="w-full bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg transition">
+                        Create Account
+                    </button>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <p class="text-sm">Already have an account? <a href="#" id="showLoginLink" class="text-primary hover:underline">Log in</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main App (Initially Hidden) -->
+    <div id="mainApp" class="hidden">
+        <div class="container mx-auto px-4 content-area">
+            <!-- Header -->
+            <header class="py-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center">
+                    <i class="fas fa-bolt text-primary text-2xl mr-2"></i>
+                    <h1 class="text-xl font-bold">ChargeMate</h1>
+                </div>
+                <div class="flex items-center">
+                    <button id="notificationBtn" class="p-2 mr-2 relative">
+                        <i class="fas fa-bell text-gray-600 dark:text-gray-400"></i>
+                        <span class="notification-badge">3</span>
+                    </button>
+                    <button id="userProfileBtn" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white">
+                        <span id="profileInitials">JD</span>
+                    </button>
+                </div>
+            </header>
+            
+            <!-- Battery Status -->
+            <section class="mt-6">
+                <div class="bg-gray-100 dark:bg-dark-card rounded-xl p-6 shadow-sm">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-car-battery mr-2 text-primary"></i>
+                            Battery Status
+                        </h2>
+                        <div class="flex items-center" id="chargingIndicator">
+                            <span class="text-xs bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 px-2 py-1 rounded flex items-center mr-2">
+                                <i class="fas fa-bolt text-yellow-500 mr-1"></i> Charging
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col md:flex-row items-center justify-between">
+                        <div class="battery-gauge mb-4 md:mb-0">
+                            <div class="battery-level" id="batteryLevel"></div>
+                            <div class="battery-text" id="batteryPercentage">75%</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 w-full md:w-auto">
+                            <div class="text-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Voltage</p>
+                                <p class="font-bold text-xl" id="voltageValue">12.6V</p>
+                            </div>
+                            <div class="text-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Temperature</p>
+                                <p class="font-bold text-xl" id="tempValue">27°C</p>
+                            </div>
+                            <div class="text-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Health</p>
+                                <p class="font-bold text-xl">Good</p>
+                            </div>
+                            <div class="text-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Est. Runtime</p>
+                                <p class="font-bold text-xl" id="estRuntime">5.2 hrs</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <div class="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                            <p class="text-sm" id="batteryAdvice">
+                                Your battery is in good condition. Consider a maintenance charge soon to optimize performance.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Charging Progress (Hidden by default) -->
+                    <div id="chargingProgress" class="mt-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm hidden">
+                        <h3 class="font-medium mb-2">Charging Progress</h3>
+                        <div class="relative h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
+                            <div id="chargingProgressBar" class="absolute left-0 top-0 h-full bg-primary" style="width: 40%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-4">
+                            <span id="chargingStartPercentage">60%</span>
+                            <span>100%</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Time Remaining</p>
+                                <p class="font-medium" id="timeRemaining">1 hr 25 min</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Charging Rate</p>
+                                <p class="font-medium">1.2 kW</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Current Cost</p>
+                                <p class="font-medium" id="currentCost">UGX 4,500</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Est. Total Cost</p>
+                                <p class="font-medium" id="totalCost">UGX 12,000</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex justify-end">
+                            <button id="stopChargingBtn" class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-lg text-sm">
+                                Stop Charging
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Main Actions -->
+            <section class="mt-6 grid grid-cols-2 gap-4">
+                <button id="findStationBtn" class="bg-primary hover:bg-primary-dark text-white p-4 rounded-xl flex flex-col items-center justify-center shadow-sm transition">
+                    <i class="fas fa-map-marker-alt mb-2 text-xl"></i>
+                    <span>Find Station</span>
+                </button>
+                <button id="scanPayBtn" class="bg-primary hover:bg-primary-dark text-white p-4 rounded-xl flex flex-col items-center justify-center shadow-sm transition">
+                    <i class="fas fa-qrcode mb-2 text-xl"></i>
+                    <span>Scan & Pay</span>
+                </button>
+            </section>
+            
+            <!-- Other Actions Button -->
+            <section class="mt-4 mb-16">
+                <button id="moreActionsBtn" class="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 p-3 rounded-xl flex items-center justify-center shadow-sm transition">
+                    <i class="fas fa-ellipsis-h mr-2"></i>
+                    <span>More Actions</span>
+                </button>
+            </section>
+        </div>
+        
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button id="homeBtn" class="flex flex-col items-center p-2 text-primary">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button id="stationsBtn" class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button id="paymentsBtn" class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button id="historyBtn" class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Additional Actions Menu (Hidden by default) -->
+    <div id="actionsMenuScreen" class="fixed inset-0 bg-black/50 z-40 hidden">
+        <div class="actions-menu bg-white dark:bg-dark-bg p-4 shadow-lg slide-up">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-lg">More Actions</h3>
+                <button id="closeActionsMenuBtn" class="p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4 mb-14">
+                <button id="batteryTipsBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-lightbulb text-xl text-yellow-500 mb-2"></i>
+                    <span class="text-xs text-center">Battery Tips</span>
+                </button>
+                
+                <button id="diagnosticsBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-stethoscope text-xl text-green-500 mb-2"></i>
+                    <span class="text-xs text-center">Diagnostics</span>
+                </button>
+                
+                <button id="maintenanceBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-tools text-xl text-red-500 mb-2"></i>
+                    <span class="text-xs text-center">Maintenance</span>
+                </button>
+                
+                <button id="batteriesBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-car-battery text-xl text-blue-500 mb-2"></i>
+                    <span class="text-xs text-center">My Batteries</span>
+                </button>
+                
+                <button id="supportBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-headset text-xl text-purple-500 mb-2"></i>
+                    <span class="text-xs text-center">Get Support</span>
+                </button>
+                
+                <button id="settingsBtn" class="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <i class="fas fa-cog text-xl text-gray-500 mb-2"></i>
+                    <span class="text-xs text-center">Settings</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Screens (All Hidden by default) -->
+    
+    <!-- Find Charging Station Screen -->
+    <div id="stationsScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Charging Stations</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                    <div class="flex space-x-2 w-full mb-3 sm:mb-0 sm:w-auto">
+                        <div class="relative flex-grow sm:flex-grow-0">
+                            <input type="text" placeholder="Search stations..." class="w-full px-4 py-2 pr-8 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base">
+                            <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                        <button class="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center">
+                            <i class="fas fa-filter mr-1"></i>
+                            <span class="text-sm">Filter</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="map-placeholder h-48 relative rounded-lg mb-4">
+                    <!-- Map placeholder - in a real app, this would be a map API -->
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="bg-white dark:bg-gray-800 p-2 rounded-full shadow-md">
+                            <i class="fas fa-map-pin text-primary text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Providers Filter -->
+                <div class="mb-4 overflow-x-auto pb-2">
+                    <div class="flex space-x-2">
+                        <button class="whitespace-nowrap px-3 py-1 bg-primary text-white rounded-full text-sm">All Providers</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">ChargeMate</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">PowerPlus</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">EcoCharge</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">Umeme</button>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <!-- Station 1 -->
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="flex items-center">
+                                    <h4 class="font-medium">Central Mall Station</h4>
+                                    <span class="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 rounded">ChargeMate</span>
+                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">0.5 km away • Open until 9 PM</p>
+                            </div>
+                            <button class="text-primary" data-station="central-mall">
+                                <i class="fas fa-directions"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between">
+                            <div>
+                                <span class="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 rounded">3 Available</span>
+                                <span class="ml-2 text-sm">⭐ 4.5 (32)</span>
+                            </div>
+                            <span class="text-sm font-medium text-primary">UGX 800/kWh</span>
+                        </div>
+                    </div>
+                    
+                    <!-- More stations would be listed here -->
+                    <!-- Station 2 -->
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="flex items-center">
+                                    <h4 class="font-medium">City Station</h4>
+                                    <span class="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 rounded">EcoCharge</span>
+                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">1.2 km away • 24 hours</p>
+                            </div>
+                            <button class="text-primary" data-station="city-station">
+                                <i class="fas fa-directions"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between">
+                            <div>
+                                <span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300 rounded">1 Available</span>
+                                <span class="ml-2 text-sm">⭐ 4.2 (18)</span>
+                            </div>
+                            <span class="text-sm font-medium text-primary">UGX 750/kWh</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Station 3 -->
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="flex items-center">
+                                    <h4 class="font-medium">Junction Power Hub</h4>
+                                    <span class="ml-2 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 rounded">PowerPlus</span>
+                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">2.7 km away • Open until 10 PM</p>
+                            </div>
+                            <button class="text-primary" data-station="junction-hub">
+                                <i class="fas fa-directions"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between">
+                            <div>
+                                <span class="px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 rounded">5 Available</span>
+                                <span class="ml-2 text-sm">⭐ 4.8 (45)</span>
+                            </div>
+                            <span class="text-sm font-medium text-primary">UGX 900/kWh</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-primary stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Scan & Pay Screen -->
+    <div id="paymentScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Scan & Pay</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm mb-6">
+                    <div class="relative w-48 h-48 mx-auto border-2 border-dashed border-primary rounded-lg overflow-hidden flex items-center justify-center">
+                        <div class="scan-line"></div>
+                        <i class="fas fa-qrcode text-6xl text-gray-300 dark:text-gray-600"></i>
+                    </div>
+                    <div class="mt-6 text-center">
+                        <button class="bg-primary hover:bg-primary-dark text-white py-2 px-6 rounded-lg">
+                            <i class="fas fa-camera mr-2"></i>Scan QR Code
+                        </button>
+                    </div>
+                </div>
+                
+                <h3 class="font-semibold mb-3">Payment Methods</h3>
+                <div class="space-y-3">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center">
+                        <div class="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mr-4">
+                            <i class="fas fa-mobile-alt text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h5 class="font-medium">MTN Mobile Money</h5>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Fast, secure mobile payments</p>
+                        </div>
+                        <div class="ml-auto">
+                            <input type="radio" name="paymentMethod" class="form-radio h-5 w-5 text-primary">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center">
+                        <div class="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mr-4">
+                            <i class="fas fa-mobile-alt text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h5 class="font-medium">Airtel Money</h5>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Pay directly from your Airtel account</p>
+                        </div>
+                        <div class="ml-auto">
+                            <input type="radio" name="paymentMethod" class="form-radio h-5 w-5 text-primary">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center">
+                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mr-4">
+                            <i class="fas fa-credit-card text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h5 class="font-medium">Visa/Mastercard</h5>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Credit or debit card payment</p>
+                        </div>
+                        <div class="ml-auto">
+                            <input type="radio" name="paymentMethod" class="form-radio h-5 w-5 text-primary" checked>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button id="continuePaymentBtn" class="w-full bg-primary hover:bg-primary-dark text-white py-3 px-4 rounded-lg">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-primary payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Battery Tips Screen -->
+    <div id="tipsScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Battery Tips</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-4">
+                    <div class="flex items-center mb-3">
+                        <i class="fas fa-info-circle text-primary text-2xl mr-3"></i>
+                        <h3 class="font-semibold text-lg">About Lead-Acid Batteries</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">
+                        Lead-acid batteries are one of the oldest and most common types of rechargeable batteries. 
+                        They are widely used in vehicles, backup power supplies, and off-grid power systems due to their 
+                        reliability, low cost, and ability to deliver high surge currents.
+                    </p>
+                </div>
+                
+                <h3 class="font-semibold mt-6 mb-3">Maintenance Tips</h3>
+                <div class="space-y-4">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-thermometer-half text-warning mr-3 text-xl"></i>
+                            <h4 class="font-medium">Avoid Extreme Temperatures</h4>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                            Keep your battery away from extreme heat or cold. Ideal operating temperature is between 20-25°C. 
+                            High temperatures accelerate battery degradation and shorten lifespan, while cold temperatures 
+                            reduce capacity temporarily.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-water text-primary mr-3 text-xl"></i>
+                            <h4 class="font-medium">Check Electrolyte Levels</h4>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                            For flooded lead-acid batteries, regularly check and maintain proper electrolyte levels. 
+                            Add distilled water when necessary, but never overfill. The liquid should cover the plates 
+                            by about 1/2 inch (13 mm). Always wear protective gear when handling battery acid.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-battery-full text-success mr-3 text-xl"></i>
+                            <h4 class="font-medium">Avoid Deep Discharges</h4>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                            Try not to let your battery discharge below 50% regularly. Deep discharges can significantly 
+                            reduce battery lifespan. For longer life, maintain your battery between 50% and 90% charge 
+                            when possible.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Charging History Screen -->
+    <div id="historyScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Charging History</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="mb-4">
+                    <div class="flex space-x-2 overflow-x-auto pb-2">
+                        <button class="whitespace-nowrap px-3 py-1 bg-primary text-white rounded-full text-sm">All History</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">This Week</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">This Month</button>
+                        <button class="whitespace-nowrap px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full text-sm">Custom Range</button>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- Charging Event 1 -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-medium">Central Mall Station</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Today, 10:30 AM</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-medium text-primary">UGX 8,650</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">10.8 kWh</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between text-sm">
+                                <div>
+                                    <p>From 45% to 100%</p>
+                                    <p class="text-gray-500 dark:text-gray-400">Duration: 1h 35m</p>
+                                </div>
+                                <button class="text-primary receipt-btn" data-receipt="1">
+                                    <i class="fas fa-receipt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charging Event 2 -->
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-medium">City Station</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Yesterday, 5:45 PM</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-medium text-primary">UGX 6,000</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">8.0 kWh</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between text-sm">
+                                <div>
+                                    <p>From 25% to 85%</p>
+                                    <p class="text-gray-500 dark:text-gray-400">Duration: 1h 10m</p>
+                                </div>
+                                <button class="text-primary receipt-btn" data-receipt="2">
+                                    <i class="fas fa-receipt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-primary history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Battery Diagnostics Screen -->
+    <div id="diagnosticsScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Battery Diagnostics</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-6">
+                    <div class="flex items-center mb-3">
+                        <i class="fas fa-stethoscope text-primary text-2xl mr-3"></i>
+                        <h3 class="font-semibold text-lg">Battery Health Check</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                        Run a comprehensive diagnostic test on your battery to check its health, capacity, and potential issues.
+                    </p>
+                    <button id="startDiagnosticBtn" class="w-full bg-primary hover:bg-primary-dark text-white py-3 px-4 rounded-lg">
+                        Start Diagnostic Test
+                    </button>
+                </div>
+                
+                <h3 class="font-semibold mb-3">Recent Tests</h3>
+                <div class="space-y-4">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="font-medium">Full Battery Test</h4>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">2 days ago</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div class="text-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Health</p>
+                                <p class="font-bold text-lg text-green-500">Good</p>
+                            </div>
+                            <div class="text-center p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">Capacity</p>
+                                <p class="font-bold text-lg">92%</p>
+                            </div>
+                        </div>
+                        <button class="text-primary text-sm view-details-btn" data-test="1">View Details</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Maintenance Schedule Screen -->
+    <div id="maintenanceScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Maintenance Schedule</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-6">
+                    <div class="flex items-center mb-3">
+                        <div class="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white mr-3">
+                            <i class="fas fa-calendar-check text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold">Next Scheduled Maintenance</h3>
+                            <p class="text-sm text-primary font-medium">August 15, 2023 (in 12 days)</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Maintenance Type</p>
+                            <p class="font-medium">Regular Check-up</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Service Provider</p>
+                            <p class="font-medium">ChargeMate Service Center</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-3 mt-4">
+                        <button id="rescheduleBtn" class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg text-sm">
+                            Reschedule
+                        </button>
+                        <button id="viewDetailsBtn" class="flex-1 border border-primary text-primary hover:bg-primary/10 py-2 px-4 rounded-lg text-sm">
+                            View Details
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Maintenance Tasks -->
+                <h3 class="font-semibold mb-3">Maintenance Tasks</h3>
+                <div class="space-y-3 mb-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="task1" class="h-5 w-5 text-primary rounded mr-3">
+                            <div>
+                                <h4 class="font-medium">Check Electrolyte Levels</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Every 3 months</p>
+                            </div>
+                            <div class="ml-auto text-right">
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded">Due in 12 days</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="task2" class="h-5 w-5 text-primary rounded mr-3">
+                            <div>
+                                <h4 class="font-medium">Clean Battery Terminals</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Every 6 months</p>
+                            </div>
+                            <div class="ml-auto text-right">
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded">Due in 12 days</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- My Batteries Screen -->
+    <div id="batteriesScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">My Batteries</h1>
+                <button id="addBatteryBtn" class="ml-auto bg-primary text-white p-2 rounded-full">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <!-- Active Battery -->
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-6 border-l-4 border-primary">
+                    <div class="flex items-center mb-3">
+                        <div class="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-car-battery text-primary text-xl"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center">
+                                <h3 class="font-semibold mr-2">Main Battery</h3>
+                                <span class="text-xs px-2 py-0.5 bg-primary/20 text-primary rounded-full">Active</span>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Lead-Acid (Flooded) • 100Ah</p>
+                        </div>
+                        <button class="ml-auto text-primary battery-menu-btn" data-battery="1">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Health</p>
+                            <p class="font-bold">Good</p>
+                        </div>
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Age</p>
+                            <p class="font-bold">7 months</p>
+                        </div>
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Cycles</p>
+                            <p class="font-bold">42</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-3 rounded-lg text-sm battery-details-btn" data-battery="1">
+                            View Details
+                        </button>
+                        <button class="flex-1 border border-primary text-primary hover:bg-primary/10 py-2 px-3 rounded-lg text-sm battery-history-btn" data-battery="1">
+                            History
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Second Battery (Inactive) -->
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-6">
+                    <div class="flex items-center mb-3">
+                        <div class="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mr-3">
+                            <i class="fas fa-car-battery text-gray-500 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold">Backup Battery</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">AGM • 85Ah</p>
+                        </div>
+                        <button class="ml-auto text-gray-500 dark:text-gray-400 battery-menu-btn" data-battery="2">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Health</p>
+                            <p class="font-bold text-warning">Fair</p>
+                        </div>
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Age</p>
+                            <p class="font-bold">1.5 years</p>
+                        </div>
+                        <div class="text-center p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Cycles</p>
+                            <p class="font-bold">96</p>
+                        </div>
+                    </div>
+                    <button id="setActiveBtn" class="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 py-2 rounded-lg text-sm">
+                        Set as Active
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Support Screen -->
+    <div id="supportScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Get Support</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm mb-6">
+                    <div class="flex items-center mb-3">
+                        <i class="fas fa-comment-alt text-primary text-2xl mr-3"></i>
+                        <h3 class="font-semibold text-lg">Chat with Support</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                        Our support team is available 24/7 to assist you with any questions or issues you may have.
+                    </p>
+                    <button id="startChatBtn" class="w-full bg-primary hover:bg-primary-dark text-white py-3 px-4 rounded-lg">
+                        Start Chat
+                    </button>
+                </div>
+                
+                <h3 class="font-semibold mb-3">Contact Options</h3>
+                <div class="space-y-4 mb-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-phone-alt text-blue-600 dark:text-blue-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium">Phone Support</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">+256 701 234 567</p>
+                            </div>
+                            <button id="callSupportBtn" class="ml-auto bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full">
+                                <i class="fas fa-phone-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-envelope text-green-600 dark:text-green-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-medium">Email Support</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">support@chargemate.com</p>
+                            </div>
+                            <button id="emailSupportBtn" class="ml-auto bg-green-500 hover:bg-green-600 text-white p-3 rounded-full">
+                                <i class="fas fa-envelope"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Settings Screen -->
+    <div id="settingsScreen" class="app-screen hidden">
+        <div class="h-full flex flex-col content-area">
+            <!-- Header -->
+            <header class="py-4 px-4 flex items-center border-b border-gray-200 dark:border-gray-700">
+                <button class="back-btn p-2 mr-2">
+                    <i class="fas fa-arrow-left text-gray-600 dark:text-gray-400"></i>
+                </button>
+                <h1 class="text-xl font-bold">Settings</h1>
+            </header>
+            
+            <!-- Content -->
+            <div class="flex-1 overflow-auto p-4">
+                <!-- App Settings -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">App Settings</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-moon text-primary mr-3"></i>
+                                <span>Dark Mode</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="darkModeToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-globe text-primary mr-3"></i>
+                                <span>Language</span>
+                            </div>
+                            <select id="languageSelect" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 text-sm">
+                                <option selected>English</option>
+                                <option>Swahili</option>
+                                <option>Luganda</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-dollar-sign text-primary mr-3"></i>
+                                <span>Currency</span>
+                            </div>
+                            <select id="currencySelect" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 text-sm">
+                                <option selected>UGX</option>
+                                <option>USD</option>
+                                <option>EUR</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Battery Settings -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Battery Settings</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-percentage text-primary mr-3"></i>
+                                <span>Low Battery Alert</span>
+                            </div>
+                            <select id="lowBatterySelect" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1 text-sm">
+                                <option>10%</option>
+                                <option selected>20%</option>
+                                <option>30%</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-bell text-primary mr-3"></i>
+                                <span>Maintenance Reminders</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="maintenanceReminderToggle" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-chart-line text-primary mr-3"></i>
+                                <span>Battery Discharge Rate</span>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="number" id="dischargeRate" value="2.5" min="0.1" max="10" step="0.1" class="w-16 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-sm text-center">
+                                <span class="ml-1">%/hr</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notification Settings -->
+                <div class="mb-6">
+                    <h3 class="font-semibold mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Notification Settings</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-battery-full text-primary mr-3"></i>
+                                <span>Battery Full Alert</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="batteryFullToggle" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-battery-empty text-primary mr-3"></i>
+                                <span>Low Battery Alert</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lowBatteryToggle" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-tag text-primary mr-3"></i>
+                                <span>Special Offers</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="offersToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button id="saveSettingsBtn" class="w-full bg-primary hover:bg-primary-dark text-white py-3 px-4 rounded-lg">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Include bottom navigation in each screen -->
+        <nav class="bottom-nav bg-white dark:bg-dark-bg border-t border-gray-200 dark:border-gray-700 flex justify-around py-2 px-4">
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 home-btn">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 stations-btn">
+                <i class="fas fa-map-marker-alt text-xl"></i>
+                <span class="text-xs mt-1">Stations</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 payments-btn">
+                <i class="fas fa-qrcode text-xl"></i>
+                <span class="text-xs mt-1">Pay</span>
+            </button>
+            <button class="flex flex-col items-center p-2 text-gray-500 dark:text-gray-400 history-btn">
+                <i class="fas fa-history text-xl"></i>
+                <span class="text-xs mt-1">History</span>
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Notifications Panel (Hidden by default) -->
+    <div id="notificationPanel" class="fixed inset-0 bg-black/50 z-40 hidden">
+        <div class="absolute right-0 top-0 bottom-0 w-4/5 max-w-md bg-white dark:bg-dark-bg p-4 shadow-lg overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-lg">Notifications</h3>
+                <button id="closeNotificationBtn" class="p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border-l-4 border-primary">
+                    <div class="flex items-start">
+                        <i class="fas fa-battery-full text-primary mt-1 mr-3"></i>
+                        <div>
+                            <h4 class="font-medium">Battery Fully Charged</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Your battery has reached 100% charge. You can disconnect from the charging station.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">5 mins ago</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg border-l-4 border-warning">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-warning mt-1 mr-3"></i>
+                        <div>
+                            <h4 class="font-medium">Maintenance Recommended</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">It's been 3 months since your last battery maintenance check. Schedule a check-up soon.</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">2 hours ago</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border-l-4 border-success">
+                    <div class="flex items-start">
+                        <i class="fas fa-tag text-success mt-1 mr-3"></i>
+                        <div>
+                            <h4 class="font-medium">Special Offer</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Get 20% off on your next charge at City Station. Use code: CHARGE20</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">Yesterday</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- User Profile Panel (Hidden by default) -->
+    <div id="userProfilePanel" class="fixed inset-0 bg-black/50 z-40 hidden">
+        <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-dark-bg p-4 shadow-lg overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-lg">My Profile</h3>
+                <button id="closeProfileBtn" class="p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6">
+                <!-- Profile Info -->
+                <div>
+                    <div class="flex items-center mb-6">
+                        <div class="relative">
+                            <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center text-white text-2xl">
+                                <span id="profilePicInitials">JD</span>
+                            </div>
+                            <button id="changePicBtn" class="absolute bottom-0 right-0 bg-white dark:bg-gray-700 w-8 h-8 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center shadow-sm">
+                                <i class="fas fa-camera text-gray-600 dark:text-gray-300"></i>
+                            </button>
+                        </div>
+                        <div class="ml-4">
+                            <h4 class="font-bold text-xl" id="profileDisplayName">John Doe</h4>
+                            <p class="text-gray-500 dark:text-gray-400" id="profileDisplayEmail">johndoe@example.com</p>
+                        </div>
+                    </div>
+                    
+                    <div id="profileViewMode">
+                        <div class="grid grid-cols-1 gap-4">
+                            <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <h5 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Full Name</h5>
+                                <p class="font-medium" id="profileNameValue">John Doe</p>
+                            </div>
+                            
+                            <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <h5 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Email Address</h5>
+                                <p class="font-medium" id="profileEmailValue">johndoe@example.com</p>
+                            </div>
+                            
+                            <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <h5 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Phone Number</h5>
+                                <p class="font-medium" id="profilePhoneValue">+256 701 234 567</p>
+                            </div>
+                            
+                            <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <h5 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Location</h5>
+                                <p class="font-medium" id="profileLocationValue">Kampala, Uganda</p>
+                            </div>
+                            
+                            <div class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <h5 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Member Since</h5>
+                                <p class="font-medium">January 15, 2023</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex space-x-3">
+                            <button id="editProfileBtn" class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg flex justify-center items-center">
+                                <i class="fas fa-pencil-alt mr-2"></i> Edit Profile
+                            </button>
+                            <button id="logoutBtn" class="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg flex justify-center items-center">
+                                <i class="fas fa-sign-out-alt mr-2"></i> Log Out
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Edit Profile Form (Hidden by default) -->
+                    <div id="profileEditMode" class="hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1" for="editName">Full Name</label>
+                                <input type="text" id="editName" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" value="John Doe">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-1" for="editEmail">Email Address</label>
+                                <input type="email" id="editEmail" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" value="johndoe@example.com">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-1" for="editPhone">Phone Number</label>
+                                <input type="tel" id="editPhone" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" value="+256 701 234 567">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-1" for="editLocation">Location</label>
+                                <input type="text" id="editLocation" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" value="Kampala, Uganda">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex space-x-3">
+                            <button id="saveProfileBtn" class="flex-1 bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg flex justify-center items-center">
+                                <i class="fas fa-save mr-2"></i> Save Changes
+                            </button>
+                            <button id="cancelEditBtn" class="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg flex justify-center items-center">
+                                <i class="fas fa-times mr-2"></i> Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Account Settings -->
+                <div>
+                    <h4 class="font-semibold mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Account Settings</h4>
+                    <div class="space-y-3">
+                        <button id="changePasswordBtn" class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-lock text-primary mr-3"></i>
+                                <span>Change Password</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        </button>
+                        
+                        <button id="paymentMethodsBtn" class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-credit-card text-primary mr-3"></i>
+                                <span>Payment Methods</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        </button>
+                        
+                        <button id="notificationSettingsBtn" class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-bell text-primary mr-3"></i>
+                                <span>Notification Settings</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        </button>
+                        
+                        <button id="myBatteriesBtn" class="w-full flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-car-battery text-primary mr-3"></i>
+                                <span>My Batteries</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Change Password Modal (Hidden by default) -->
+    <div id="changePasswordModal" class="fixed inset-0 bg-black/50 z-50 hidden">
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-dark-bg p-6 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-lg">Change Password</h3>
+                <button class="close-modal p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="currentPassword">Current Password</label>
+                    <input type="password" id="currentPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Enter current password">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="newPassword">New Password</label>
+                    <input type="password" id="newPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Enter new password">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1" for="confirmNewPassword">Confirm New Password</label>
+                    <input type="password" id="confirmNewPassword" class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-base focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Confirm new password">
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button class="close-modal border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-lg">
+                        Cancel
+                    </button>
+                    <button id="updatePasswordBtn" class="bg-primary hover:bg-primary-dark text-white py-2 px-4 rounded-lg">
+                        Update Password
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Authentication state
+        let isAuthenticated = false;
+        
+        // Battery state variables
+        let batteryPercentage = 75;
+        let isCharging = false;
+        let chargingStartPercentage = 0;
+        let chargeRate = 5; // percentage points per minute
+        let chargingCostPerKwh = 800; // UGX per kWh
+        let batteryCapacity = 100; // Ah
+        let batteryVoltage = 12; // V
+        let currentCost = 0;
+        let chargingInterval;
+        let chargingStartTime;
+        let batteryDischargeRate = 2.5; // % per hour (used for runtime calculation)
+        
+        // User profile data
+        const userData = {
+            name: "John Doe",
+            email: "johndoe@example.com",
+            phone: "+256 701 234 567",
+            location: "Kampala, Uganda",
+            memberSince: "January 15, 2023"
+        };
+        
+        // Action screen state
+        let currentScreen = null;
+        
+        // Login/Signup functionality
+        document.getElementById('loginButton').addEventListener('click', () => {
+            isAuthenticated = true;
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            initializeApp();
+        });
+        
+        document.getElementById('signupButton').addEventListener('click', () => {
+            isAuthenticated = true;
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            initializeApp();
+        });
+        
+        document.getElementById('showSignupLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('signupForm').classList.remove('hidden');
+        });
+        
+        document.getElementById('showLoginLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('signupForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        });
+        
+        // Initialize app once authenticated
+        function initializeApp() {
+            updateBatteryDisplay();
+            updateProfileData();
+            
+            // Initialize charging indicator (hidden by default)
+            document.getElementById('chargingIndicator').style.display = 'none';
+            
+            // Simulate battery discharge over time (when not charging)
+            setInterval(() => {
+                if (!isCharging && batteryPercentage > 5) {
+                    batteryPercentage -= 1;
+                    updateBatteryDisplay();
+                    updateBatteryAdvice();
+                    updateEstimatedRuntime();
+                }
+            }, 60000); // Update every minute
+            
+            // Randomly fluctuate temperature
+            setInterval(() => {
+                const tempValue = document.getElementById('tempValue');
+                const currentTemp = parseInt(tempValue.textContent);
+                const newTemp = currentTemp + (Math.random() > 0.5 ? 1 : -1);
+                
+                if (newTemp >= 25 && newTemp <= 30) {
+                    tempValue.textContent = `${newTemp}°C`;
+                }
+            }, 30000); // Update every 30 seconds
+            
+            // Initial estimated runtime calculation
+            updateEstimatedRuntime();
+            
+            // Initialize all screen navigation
+            initializeNavigationEvents();
+        }
+        
+        function updateBatteryDisplay() {
+            const batteryLevel = document.getElementById('batteryLevel');
+            const batteryText = document.getElementById('batteryPercentage');
+            const voltageValue = document.getElementById('voltageValue');
+            
+            batteryLevel.style.height = `${batteryPercentage}%`;
+            batteryText.textContent = `${batteryPercentage}%`;
+            
+            // Update voltage based on battery percentage
+            let voltage = 11.0 + (batteryPercentage * 0.02);
+            voltageValue.textContent = `${voltage.toFixed(1)}V`;
+            
+            // Set color based on battery level
+            if (batteryPercentage < 20) {
+                batteryLevel.style.background = 'linear-gradient(to top, #EF4444, #F59E0B)';
+            } else if (batteryPercentage < 50) {
+                batteryLevel.style.background = 'linear-gradient(to top, #F59E0B, #5D5CDE)';
+            } else {
+                batteryLevel.style.background = 'linear-gradient(to top, #10B981, #5D5CDE)';
+            }
+        }
+        
+        function updateBatteryAdvice() {
+            const batteryAdvice = document.getElementById('batteryAdvice');
+            
+            if (isCharging) {
+                batteryAdvice.textContent = 'Your battery is charging. Please wait until it reaches full capacity.';
+                batteryAdvice.parentElement.classList.remove('bg-red-100', 'dark:bg-red-900/40', 'bg-yellow-100', 'dark:bg-yellow-900/40', 'bg-blue-100', 'dark:bg-blue-900/40');
+                batteryAdvice.parentElement.classList.add('bg-green-100', 'dark:bg-green-900/40');
+            } else if (batteryPercentage < 20) {
+                batteryAdvice.textContent = 'Your battery is low. Please connect to a charging station soon to avoid damage.';
+                batteryAdvice.parentElement.classList.remove('bg-blue-100', 'dark:bg-blue-900/40', 'bg-green-100', 'dark:bg-green-900/40');
+                batteryAdvice.parentElement.classList.add('bg-red-100', 'dark:bg-red-900/40');
+            } else if (batteryPercentage < 50) {
+                batteryAdvice.textContent = 'Your battery is at a moderate level. Consider charging in the next few hours.';
+                batteryAdvice.parentElement.classList.remove('bg-red-100', 'dark:bg-red-900/40', 'bg-blue-100', 'dark:bg-blue-900/40', 'bg-green-100', 'dark:bg-green-900/40');
+                batteryAdvice.parentElement.classList.add('bg-yellow-100', 'dark:bg-yellow-900/40');
+            } else {
+                batteryAdvice.textContent = 'Your battery is in good condition. Consider a maintenance charge soon to optimize performance.';
+                batteryAdvice.parentElement.classList.remove('bg-red-100', 'dark:bg-red-900/40', 'bg-yellow-100', 'dark:bg-yellow-900/40', 'bg-green-100', 'dark:bg-green-900/40');
+                batteryAdvice.parentElement.classList.add('bg-blue-100', 'dark:bg-blue-900/40');
+            }
+        }
+        
+        // Update the estimated runtime based on battery percentage
+        function updateEstimatedRuntime() {
+            if (isCharging) return; // Don't update when charging
+            
+            const estRuntime = document.getElementById('estRuntime');
+            
+            // Calculate runtime based on current battery percentage and discharge rate
+            const hoursRemaining = batteryPercentage / batteryDischargeRate;
+            
+            let runtimeText;
+            if (hoursRemaining >= 1) {
+                const hours = Math.floor(hoursRemaining);
+                const minutes = Math.round((hoursRemaining - hours) * 60);
+                if (minutes > 0) {
+                    runtimeText = `${hours}.${minutes} hrs`;
+                } else {
+                    runtimeText = `${hours} hrs`;
+                }
+            } else {
+                const minutes = Math.round(hoursRemaining * 60);
+                runtimeText = `${minutes} min`;
+            }
+            
+            estRuntime.textContent = runtimeText;
+        }
+        
+        // Initialize user profile data display
+        function updateProfileData() {
+            // Update profile display areas
+            document.getElementById('profileInitials').textContent = getInitials(userData.name);
+            document.getElementById('profilePicInitials').textContent = getInitials(userData.name);
+            document.getElementById('profileDisplayName').textContent = userData.name;
+            document.getElementById('profileDisplayEmail').textContent = userData.email;
+            
+            // Update profile view fields
+            document.getElementById('profileNameValue').textContent = userData.name;
+            document.getElementById('profileEmailValue').textContent = userData.email;
+            document.getElementById('profilePhoneValue').textContent = userData.phone;
+            document.getElementById('profileLocationValue').textContent = userData.location;
+            
+            // Update profile edit fields
+            document.getElementById('editName').value = userData.name;
+            document.getElementById('editEmail').value = userData.email;
+            document.getElementById('editPhone').value = userData.phone;
+            document.getElementById('editLocation').value = userData.location;
+        }
+        
+        // Get initials from name
+        function getInitials(name) {
+            return name.split(' ')
+                .map(part => part.charAt(0))
+                .join('')
+                .toUpperCase();
+        }
+        
+        // Charging station selection functionality
+        function initializeStationButtons() {
+            const stationButtons = document.querySelectorAll('button[data-station]');
+            stationButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const stationId = button.getAttribute('data-station');
+                    // Set charging rate based on selected station
+                    switch(stationId) {
+                        case 'central-mall':
+                            chargingCostPerKwh = 800;
+                            break;
+                        case 'city-station':
+                            chargingCostPerKwh = 750;
+                            break;
+                        case 'junction-hub':
+                            chargingCostPerKwh = 900;
+                            break;
+                        default:
+                            chargingCostPerKwh = 800;
+                    }
+                    startCharging();
+                    hideScreen(currentScreen);
+                });
+            });
+        }
+        
+        // Start charging function
+        function startCharging() {
+            if (isCharging) return;
+            
+            isCharging = true;
+            chargingStartPercentage = batteryPercentage;
+            chargingStartTime = new Date();
+            currentCost = 0;
+            
+            // Show charging indicator
+            document.getElementById('chargingIndicator').style.display = 'flex';
+            
+            // Show charging progress section
+            document.getElementById('chargingProgress').classList.remove('hidden');
+            
+            // Update charging progress UI
+            document.getElementById('chargingStartPercentage').textContent = `${chargingStartPercentage}%`;
+            updateChargingProgress();
+            
+            // Start charging interval
+            chargingInterval = setInterval(() => {
+                if (batteryPercentage < 100) {
+                    // Simulate charging (faster than discharging)
+                    batteryPercentage = Math.min(100, batteryPercentage + 1);
+                    
+                    // Update battery display
+                    updateBatteryDisplay();
+                    updateBatteryAdvice();
+                    
+                    // Update charging progress
+                    updateChargingProgress();
+                } else {
+                    // Battery fully charged
+                    completeCharging();
+                }
+            }, 2000); // Update every 2 seconds for demo (would be slower in real life)
+            
+            // Set up stop charging button
+            document.getElementById('stopChargingBtn').addEventListener('click', completeCharging);
+        }
+        
+        // Update charging progress UI
+        function updateChargingProgress() {
+            const progressBar = document.getElementById('chargingProgressBar');
+            const timeRemaining = document.getElementById('timeRemaining');
+            const currentCostElem = document.getElementById('currentCost');
+            const totalCostElem = document.getElementById('totalCost');
+            
+            // Calculate progress percentage
+            const progressPercentage = batteryPercentage - chargingStartPercentage;
+            const totalProgressNeeded = 100 - chargingStartPercentage;
+            const progressWidth = (progressPercentage / totalProgressNeeded) * 100;
+            
+            // Update progress bar
+            progressBar.style.width = `${progressWidth}%`;
+            
+            // Calculate time remaining
+            const percentageLeft = 100 - batteryPercentage;
+            const minutesRemaining = Math.ceil(percentageLeft / chargeRate);
+            
+            let timeRemainingText;
+            if (minutesRemaining >= 60) {
+                const hours = Math.floor(minutesRemaining / 60);
+                const mins = minutesRemaining % 60;
+                timeRemainingText = `${hours} hr ${mins} min`;
+            } else {
+                timeRemainingText = `${minutesRemaining} min`;
+            }
+            
+            timeRemaining.textContent = timeRemainingText;
+            
+            // Calculate cost
+            // 1% of 100Ah battery at 12V is 0.012 kWh
+            const kwhPerPercentage = (batteryCapacity * batteryVoltage) / 1000 / 100;
+            const kwhCharged = progressPercentage * kwhPerPercentage;
+            currentCost = kwhCharged * chargingCostPerKwh;
+            const totalCost = totalProgressNeeded * kwhPerPercentage * chargingCostPerKwh;
+            
+            currentCostElem.textContent = `UGX ${Math.round(currentCost).toLocaleString()}`;
+            totalCostElem.textContent = `UGX ${Math.round(totalCost).toLocaleString()}`;
+        }
+        
+        // Complete charging function
+        function completeCharging() {
+            clearInterval(chargingInterval);
+            isCharging = false;
+            
+            // Hide charging indicator
+            document.getElementById('chargingIndicator').style.display = 'none';
+            
+            // Hide charging progress section
+            document.getElementById('chargingProgress').classList.add('hidden');
+            
+            // Update battery advice
+            updateBatteryAdvice();
+            
+            // Update estimated runtime based on new battery percentage
+            updateEstimatedRuntime();
+            
+            // Show charging completion notification
+            const notificationPanel = document.getElementById('notificationPanel');
+            const notificationsContainer = notificationPanel.querySelector('.space-y-3');
+            
+            // Create a new notification
+            const newNotification = document.createElement('div');
+            newNotification.className = 'p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border-l-4 border-primary';
+            newNotification.innerHTML = `
+                <div class="flex items-start">
+                    <i class="fas fa-battery-full text-primary mt-1 mr-3"></i>
+                    <div>
+                        <h4 class="font-medium">Charging Complete</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Your battery is now at ${batteryPercentage}%. Total cost: UGX ${Math.round(currentCost).toLocaleString()}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">Just now</p>
+                    </div>
+                </div>
+            `;
+            
+            // Add the notification to the top of the list
+            notificationsContainer.prepend(newNotification);
+            
+            // Show notification badge if not already visible
+            const badges = document.querySelectorAll('.notification-badge');
+            badges.forEach(badge => {
+                badge.textContent = parseInt(badge.textContent) + 1;
+            });
+            
+            // Add to charging history (in a real app, this would be saved to a database)
+            addChargingHistoryEntry();
+        }
+        
+        // Add a charging history entry
+        function addChargingHistoryEntry() {
+            // This is a simplified version - in a real app, this would store data in a database
+            console.log("Added charging history entry:", {
+                station: "Selected Station",
+                startTime: chargingStartTime,
+                endTime: new Date(),
+                startPercentage: chargingStartPercentage,
+                endPercentage: batteryPercentage,
+                cost: currentCost,
+                kwhCharged: ((batteryPercentage - chargingStartPercentage) * batteryCapacity * batteryVoltage) / 1000 / 100
+            });
+        }
+        
+        // Show screen function
+        function showScreen(screenId) {
+            if (currentScreen) {
+                hideScreen(currentScreen);
+            }
+            
+            const screen = document.getElementById(screenId);
+            if (screen) {
+                screen.classList.remove('hidden');
+                screen.classList.add('slide-in-right');
+                currentScreen = screenId;
+            }
+        }
+        
+        // Hide screen function
+        function hideScreen(screenId) {
+            const screen = document.getElementById(screenId);
+            if (screen) {
+                screen.classList.add('hidden');
+                screen.classList.remove('slide-in-right');
+            }
+        }
+        
+        // Initialize all navigation events
+        function initializeNavigationEvents() {
+            // Actions Menu events
+            document.getElementById('moreActionsBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.remove('hidden');
+            });
+            
+            document.getElementById('closeActionsMenuBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+            });
+            
+            // Close actions menu when clicking outside
+            document.getElementById('actionsMenuScreen').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('actionsMenuScreen')) {
+                    document.getElementById('actionsMenuScreen').classList.add('hidden');
+                }
+            });
+            
+            // Main action buttons
+            document.getElementById('findStationBtn').addEventListener('click', () => {
+                showScreen('stationsScreen');
+            });
+            
+            document.getElementById('scanPayBtn').addEventListener('click', () => {
+                showScreen('paymentScreen');
+            });
+            
+            // More action buttons
+            document.getElementById('batteryTipsBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('tipsScreen');
+            });
+            
+            document.getElementById('diagnosticsBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('diagnosticsScreen');
+            });
+            
+            document.getElementById('maintenanceBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('maintenanceScreen');
+            });
+            
+            document.getElementById('batteriesBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('batteriesScreen');
+            });
+            
+            document.getElementById('supportBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('supportScreen');
+            });
+            
+            document.getElementById('settingsBtn').addEventListener('click', () => {
+                document.getElementById('actionsMenuScreen').classList.add('hidden');
+                showScreen('settingsScreen');
+            });
+            
+            // Initialize all back buttons
+            document.querySelectorAll('.back-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    hideScreen(currentScreen);
+                    currentScreen = null;
+                });
+            });
+            
+            // Initialize bottom navigation on main screen
+            initializeBottomNavigation();
+            
+            // Initialize bottom navigation on individual screens
+            initializeScreenBottomNavigation();
+            
+            // Initialize profile functionality
+            initializeProfileFunctionality();
+            
+            // Initialize notifications
+            initializeNotifications();
+            
+            // Initialize station buttons
+            initializeStationButtons();
+            
+            // Initialize settings functionality
+            initializeSettingsFunctionality();
+            
+            // Initialize misc buttons
+            initializeMiscButtons();
+        }
+        
+        // Initialize bottom navigation
+        function initializeBottomNavigation() {
+            document.getElementById('homeBtn').addEventListener('click', () => {
+                if (currentScreen) {
+                    hideScreen(currentScreen);
+                    currentScreen = null;
+                }
+                resetNavButtons();
+                document.getElementById('homeBtn').classList.add('text-primary');
+                document.getElementById('homeBtn').classList.remove('text-gray-500', 'dark:text-gray-400');
+            });
+            
+            document.getElementById('stationsBtn').addEventListener('click', () => {
+                showScreen('stationsScreen');
+                resetNavButtons();
+                document.getElementById('stationsBtn').classList.add('text-primary');
+                document.getElementById('stationsBtn').classList.remove('text-gray-500', 'dark:text-gray-400');
+            });
+            
+            document.getElementById('paymentsBtn').addEventListener('click', () => {
+                showScreen('paymentScreen');
+                resetNavButtons();
+                document.getElementById('paymentsBtn').classList.add('text-primary');
+                document.getElementById('paymentsBtn').classList.remove('text-gray-500', 'dark:text-gray-400');
+            });
+            
+            document.getElementById('historyBtn').addEventListener('click', () => {
+                showScreen('historyScreen');
+                resetNavButtons();
+                document.getElementById('historyBtn').classList.add('text-primary');
+                document.getElementById('historyBtn').classList.remove('text-gray-500', 'dark:text-gray-400');
+            });
+        }
+        
+        // Initialize bottom navigation in screens
+        function initializeScreenBottomNavigation() {
+            // Home buttons in each screen
+            document.querySelectorAll('.home-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    hideScreen(currentScreen);
+                    currentScreen = null;
+                    resetNavButtons();
+                    document.getElementById('homeBtn').classList.add('text-primary');
+                    document.getElementById('homeBtn').classList.remove('text-gray-500', 'dark:text-gray-400');
+                });
+            });
+            
+            // Stations buttons in each screen
+            document.querySelectorAll('.stations-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    if (currentScreen !== 'stationsScreen') {
+                        hideScreen(currentScreen);
+                        showScreen('stationsScreen');
+                    }
+                });
+            });
+            
+            // Payments buttons in each screen
+            document.querySelectorAll('.payments-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    if (currentScreen !== 'paymentScreen') {
+                        hideScreen(currentScreen);
+                        showScreen('paymentScreen');
+                    }
+                });
+            });
+            
+            // History buttons in each screen
+            document.querySelectorAll('.history-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    if (currentScreen !== 'historyScreen') {
+                        hideScreen(currentScreen);
+                        showScreen('historyScreen');
+                    }
+                });
+            });
+        }
+        
+        function resetNavButtons() {
+            const navButtons = ['homeBtn', 'stationsBtn', 'paymentsBtn', 'historyBtn'];
+            navButtons.forEach(id => {
+                document.getElementById(id).classList.remove('text-primary');
+                document.getElementById(id).classList.add('text-gray-500', 'dark:text-gray-400');
+            });
+        }
+        
+        // Initialize notification functionality
+        function initializeNotifications() {
+            document.getElementById('notificationBtn').addEventListener('click', () => {
+                document.getElementById('notificationPanel').classList.remove('hidden');
+            });
+            
+            document.getElementById('closeNotificationBtn').addEventListener('click', () => {
+                document.getElementById('notificationPanel').classList.add('hidden');
+            });
+            
+            // Close notification panel when clicking outside
+            document.getElementById('notificationPanel').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('notificationPanel')) {
+                    document.getElementById('notificationPanel').classList.add('hidden');
+                }
+            });
+        }
+        
+        // Initialize user profile functionality
+        function initializeProfileFunctionality() {
+            // User profile toggle
+            document.getElementById('userProfileBtn').addEventListener('click', () => {
+                document.getElementById('userProfilePanel').classList.remove('hidden');
+            });
+            
+            document.getElementById('closeProfileBtn').addEventListener('click', () => {
+                document.getElementById('userProfilePanel').classList.add('hidden');
+            });
+            
+            // Close profile panel when clicking outside
+            document.getElementById('userProfilePanel').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('userProfilePanel')) {
+                    document.getElementById('userProfilePanel').classList.add('hidden');
+                }
+            });
+            
+            // Profile edit mode toggle
+            document.getElementById('editProfileBtn').addEventListener('click', () => {
+                document.getElementById('profileViewMode').classList.add('hidden');
+                document.getElementById('profileEditMode').classList.remove('hidden');
+            });
+            
+            document.getElementById('cancelEditBtn').addEventListener('click', () => {
+                document.getElementById('profileEditMode').classList.add('hidden');
+                document.getElementById('profileViewMode').classList.remove('hidden');
+                
+                // Reset the form to original values
+                document.getElementById('editName').value = userData.name;
+                document.getElementById('editEmail').value = userData.email;
+                document.getElementById('editPhone').value = userData.phone;
+                document.getElementById('editLocation').value = userData.location;
+            });
+            
+            document.getElementById('saveProfileBtn').addEventListener('click', () => {
+                // Get values from form
+                const newName = document.getElementById('editName').value;
+                const newEmail = document.getElementById('editEmail').value;
+                const newPhone = document.getElementById('editPhone').value;
+                const newLocation = document.getElementById('editLocation').value;
+                
+                // Update user data
+                userData.name = newName;
+                userData.email = newEmail;
+                userData.phone = newPhone;
+                userData.location = newLocation;
+                
+                // Update all profile displays
+                updateProfileData();
+                
+                // Switch back to view mode
+                document.getElementById('profileEditMode').classList.add('hidden');
+                document.getElementById('profileViewMode').classList.remove('hidden');
+                
+                // Show success message
+                alert('Profile updated successfully!');
+            });
+            
+            // Logout functionality
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                isAuthenticated = false;
+                document.getElementById('mainApp').classList.add('hidden');
+                document.getElementById('userProfilePanel').classList.add('hidden');
+                if (currentScreen) {
+                    hideScreen(currentScreen);
+                    currentScreen = null;
+                }
+                document.getElementById('authScreen').classList.remove('hidden');
+            });
+            
+            // Initialize change password functionality
+            document.getElementById('changePasswordBtn').addEventListener('click', () => {
+                document.getElementById('changePasswordModal').classList.remove('hidden');
+            });
+            
+            document.querySelectorAll('.close-modal').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.getElementById('changePasswordModal').classList.add('hidden');
+                });
+            });
+            
+            document.getElementById('updatePasswordBtn').addEventListener('click', () => {
+                // In a real app, this would validate and update the password
+                alert('Password updated successfully!');
+                document.getElementById('changePasswordModal').classList.add('hidden');
+                
+                // Clear the password fields
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmNewPassword').value = '';
+            });
+            
+            // My Batteries button in profile
+            document.getElementById('myBatteriesBtn').addEventListener('click', () => {
+                document.getElementById('userProfilePanel').classList.add('hidden');
+                showScreen('batteriesScreen');
+            });
+            
+            // Change profile picture button
+            document.getElementById('changePicBtn').addEventListener('click', () => {
+                alert('Profile picture upload would be handled here');
+            });
+        }
+        
+        // Initialize settings functionality
+        function initializeSettingsFunctionality() {
+            // Dark mode toggle
+            const darkModeToggles = document.querySelectorAll('#darkModeToggle');
+            darkModeToggles.forEach(toggle => {
+                toggle.checked = document.documentElement.classList.contains('dark');
+                
+                toggle.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                    
+                    // Update all dark mode toggles to stay in sync
+                    darkModeToggles.forEach(t => {
+                        t.checked = e.target.checked;
+                    });
+                });
+            });
+            
+            // Discharge rate input
+            document.getElementById('dischargeRate').addEventListener('change', (e) => {
+                batteryDischargeRate = parseFloat(e.target.value);
+                updateEstimatedRuntime();
+            });
+            
+            // Save settings button
+            document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+                // Get settings values (in a real app, these would be saved)
+                const language = document.getElementById('languageSelect').value;
+                const currency = document.getElementById('currencySelect').value;
+                const lowBatteryAlert = document.getElementById('lowBatterySelect').value;
+                const maintenanceReminders = document.getElementById('maintenanceReminderToggle').checked;
+                const batteryFull = document.getElementById('batteryFullToggle').checked;
+                const lowBattery = document.getElementById('lowBatteryToggle').checked;
+                const offers = document.getElementById('offersToggle').checked;
+                
+                // Save settings (simulated)
+                console.log('Settings saved:', {
+                    language,
+                    currency,
+                    lowBatteryAlert,
+                    maintenanceReminders,
+                    batteryFull,
+                    lowBattery,
+                    offers,
+                    batteryDischargeRate
+                });
+                
+                alert('Settings saved successfully!');
+                hideScreen('settingsScreen');
+            });
+        }
+        
+        // Initialize miscellaneous button functionality
+        function initializeMiscButtons() {
+            // Battery details button
+            document.querySelectorAll('.battery-details-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const batteryId = button.getAttribute('data-battery');
+                    alert(`Battery details for battery ${batteryId} would be shown here`);
+                });
+            });
+            
+            // Battery history button
+            document.querySelectorAll('.battery-history-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const batteryId = button.getAttribute('data-battery');
+                    showScreen('historyScreen');
+                });
+            });
+            
+            // Battery menu button
+            document.querySelectorAll('.battery-menu-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const batteryId = button.getAttribute('data-battery');
+                    alert(`Menu options for battery ${batteryId} would be shown here`);
+                });
+            });
+            
+            // Set active battery button
+            document.getElementById('setActiveBtn').addEventListener('click', () => {
+                alert('Battery set as active');
+            });
+            
+            // Add battery button
+            document.getElementById('addBatteryBtn').addEventListener('click', () => {
+                alert('Add battery form would be shown here');
+            });
+            
+            // Start diagnostic test button
+            document.getElementById('startDiagnosticBtn').addEventListener('click', () => {
+                alert('Diagnostic test started. This would take a few minutes to complete.');
+            });
+            
+            // View diagnostic details button
+            document.querySelectorAll('.view-details-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const testId = button.getAttribute('data-test');
+                    alert(`Detailed diagnostic results for test ${testId} would be shown here`);
+                });
+            });
+            
+            // Maintenance task checkboxes
+            document.getElementById('task1').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    alert('Task marked as completed');
+                }
+            });
+            
+            document.getElementById('task2').addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    alert('Task marked as completed');
+                }
+            });
+            
+            // Reschedule maintenance button
+            document.getElementById('rescheduleBtn').addEventListener('click', () => {
+                alert('Maintenance reschedule form would be shown here');
+            });
+            
+            // View maintenance details button
+            document.getElementById('viewDetailsBtn').addEventListener('click', () => {
+                alert('Detailed maintenance information would be shown here');
+            });
+            
+            // Receipt buttons
+            document.querySelectorAll('.receipt-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const receiptId = button.getAttribute('data-receipt');
+                    alert(`Receipt details for transaction ${receiptId} would be shown here`);
+                });
+            });
+            
+            // Continue payment button
+            document.getElementById('continuePaymentBtn').addEventListener('click', () => {
+                alert('Payment processing would continue here');
+            });
+            
+            // Support contact buttons
+            document.getElementById('startChatBtn').addEventListener('click', () => {
+                alert('Chat with support would be initiated here');
+            });
+            
+            document.getElementById('callSupportBtn').addEventListener('click', () => {
+                alert('Call to support would be initiated here');
+            });
+            
+            document.getElementById('emailSupportBtn').addEventListener('click', () => {
+                alert('Email to support would be composed here');
+            });
+        }
+        
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set dark mode toggle based on system preference
+            const darkModeToggles = document.querySelectorAll('#darkModeToggle');
+            darkModeToggles.forEach(toggle => {
+                toggle.checked = document.documentElement.classList.contains('dark');
+            });
+        });
+    </script>
+</body>
+</html>
